@@ -1,0 +1,15 @@
+[project]
+name = "amber-home"
+version = "0.1.0"
+description = "Simple home energy data collection and analysis for Amber Electric"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "streamlit",
+    "amberelectric==1.0.3",
+    "pandas",
+    "plotly",
+    "psycopg2-binary>=2.9.0",
+    "python-dotenv>=1.0.0",
+    "psycopg2>=2.9.10",
+]
