@@ -20,5 +20,30 @@ services:
       timeout: 10s
       retries: 3
 
+  data-collector:
+    build: .
+    container_name: amber-home-collector
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection - uses Railway DATABASE_URL if set,
+      # otherwise uses local postgres URL
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # Amber API configuration
+      AMBER_API_KEY: ${AMBER_API_KEY}
+      
+      # Required configuration
+      HISTORICAL_START_DATE: ${HISTORICAL_START_DATE}
+      
+      # Optional configuration (with defaults)
+      COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
 volumes:
   postgres_data:
