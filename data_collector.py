@@ -151,7 +151,7 @@ class DataCollector:
                     
                     cursor.execute("""
                         INSERT INTO sites (id, nmi)
-                        VALUES (%s, %s, %s)
+                        VALUES (%s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             nmi = EXCLUDED.nmi
                     """, (site.id, site.nmi))
