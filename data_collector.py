@@ -16,7 +16,6 @@ import sys
 from datetime import datetime, timedelta
 from typing import Optional, List
 import psycopg2
-import psycopg2.extras
 from dotenv import load_dotenv
 from amber_client import AmberClient
 
@@ -80,7 +79,7 @@ class DataCollector:
         except ValueError as e:
             raise ValueError(f"Invalid HISTORICAL_START_DATE: {e}")
         
-    def connect_db(self) -> psycopg2.extensions.connection:
+    def connect_db(self):
         """Connect to PostgreSQL database using DATABASE_URL"""
         database_url = os.getenv('DATABASE_URL')
         
@@ -126,13 +125,28 @@ class DataCollector:
             
         try:
             with self.db_connection.cursor() as cursor:
-                cursor.execute(schema_sql)
-                self.db_connection.commit()
+                # Split schema into individual statements
+                statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
+                
+                for statement in statements:
+                    try:
+                        cursor.execute(statement)
+                        self.db_connection.commit()
+                    except psycopg2.errors.DuplicateObject:
+                        # Already exists, rollback and continue
+                        self.db_connection.rollback()
+                        continue
+                    except psycopg2.errors.DuplicateTable:
+                        # Table already exists, rollback and continue
+                        self.db_connection.rollback()
+                        continue
+                    except Exception as e:
+                        # Other error, rollback and continue (don't fail)
+                        logger.warning(f"Schema statement failed (continuing): {e}")
+                        self.db_connection.rollback()
+                        continue
+                        
                 logger.info("Database schema ensured")
-        except psycopg2.errors.DuplicateObject as e:
-            # Schema already exists, this is fine
-            logger.info(f"Database schema already exists: {e}")
-            self.db_connection.rollback()
         except Exception as e:
             logger.error(f"Failed to create database schema: {e}")
             self.db_connection.rollback()
@@ -182,25 +196,37 @@ class DataCollector:
                     
                     with self.db_connection.cursor() as cursor:
                         for price in prices:
+                            # Handle new SDK v2.0.12 structure - get actual instance
+                            price_data = price.actual_instance if hasattr(price, 'actual_instance') else price
+                            
                             cursor.execute("""
                                 INSERT INTO price_data (
-                                    site_id, nem_time, channel_type, per_kwh, spot_per_kwh, 
-                                    renewables, spike_status
+                                    site_id, nem_time, start_time, end_time, duration, channel_type, 
+                                    per_kwh, spot_per_kwh, renewables, spike_status, descriptor, 
+                                    estimate, var_date
                                 )
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                 ON CONFLICT (site_id, nem_time, channel_type) DO UPDATE SET
                                     per_kwh = EXCLUDED.per_kwh,
                                     spot_per_kwh = EXCLUDED.spot_per_kwh,
                                     renewables = EXCLUDED.renewables,
-                                    spike_status = EXCLUDED.spike_status
+                                    spike_status = EXCLUDED.spike_status,
+                                    descriptor = EXCLUDED.descriptor,
+                                    estimate = EXCLUDED.estimate
                             """, (
                                 site.id,
-                                price.nem_time,
-                                str(price.channel_type),  # Convert enum to string
-                                price.per_kwh,
-                                price.spot_per_kwh,
-                                price.renewables,
-                                str(getattr(price, 'spike_status', None)) if getattr(price, 'spike_status', None) else None
+                                price_data.nem_time,
+                                getattr(price_data, 'start_time', None),
+                                getattr(price_data, 'end_time', None),
+                                getattr(price_data, 'duration', None),
+                                str(price_data.channel_type),
+                                price_data.per_kwh,
+                                price_data.spot_per_kwh,
+                                price_data.renewables,
+                                str(getattr(price_data, 'spike_status', None)) if getattr(price_data, 'spike_status', None) else None,
+                                str(getattr(price_data, 'descriptor', None)) if getattr(price_data, 'descriptor', None) else None,
+                                getattr(price_data, 'estimate', False),
+                                getattr(price_data, 'var_date', None)
                             ))
                     
                     self.db_connection.commit()
@@ -233,28 +259,34 @@ class DataCollector:
                     with self.db_connection.cursor() as cursor:
                         logger.info(f"Got {len(usage_data)} usage records for site {site.id}")
                         for usage in usage_data:
-                            # Get raw channel_id from API (may be None)
-                            channel_id = getattr(usage, 'channelIdentifier', None)
+                            # Get raw channel_id from API - now available as channel_identifier
+                            channel_id = getattr(usage, 'channel_identifier', None)
                             
                             # Store raw API data without filtering or modifications
                             cursor.execute("""
                                 INSERT INTO usage_data (
-                                    site_id, nem_time, channel_id, channel_type, kwh, 
-                                    cost, quality
+                                    site_id, nem_time, start_time, end_time, duration, channel_id, 
+                                    channel_type, kwh, cost, quality, descriptor, var_date
                                 )
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                 ON CONFLICT (site_id, nem_time, channel_id) DO UPDATE SET
                                     kwh = EXCLUDED.kwh,
                                     cost = EXCLUDED.cost,
-                                    quality = EXCLUDED.quality
+                                    quality = EXCLUDED.quality,
+                                    descriptor = EXCLUDED.descriptor
                             """, (
                                 site.id,
                                 usage.nem_time,
+                                getattr(usage, 'start_time', None),
+                                getattr(usage, 'end_time', None),
+                                getattr(usage, 'duration', None),
                                 channel_id,
-                                str(usage.channel_type),  # Convert enum to string
+                                str(usage.channel_type),
                                 usage.kwh,
-                                usage.cost,  # Raw cost from API (in cents)
-                                usage.quality
+                                usage.cost,
+                                usage.quality,
+                                str(getattr(usage, 'descriptor', None)) if getattr(usage, 'descriptor', None) else None,
+                                getattr(usage, 'var_date', None)
                             ))
                     
                     self.db_connection.commit()

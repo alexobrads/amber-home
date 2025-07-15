@@ -27,9 +27,10 @@ class AmberClient:
         if not api_token:
             raise ValueError("API token must be provided via parameter or AMBER_API_KEY environment variable")
             
-        # Configure the API client following Graham Lea's pattern
+        # Configure the API client for v2.0.12
         amber_configuration = amberelectric.Configuration(access_token=api_token)
-        self.client = amber_api.AmberApi.create(amber_configuration)
+        api_client = amberelectric.ApiClient(amber_configuration)
+        self.client = amber_api.AmberApi(api_client)
     
     def get_sites(self) -> List[Site]:
         """Get all sites linked to the account."""
@@ -52,7 +53,7 @@ class AmberClient:
         try:
             # Calculate number of 30-minute intervals
             next_intervals = next_hours * 2
-            return self.client.get_current_price(site_id, next=next_intervals)
+            return self.client.get_current_prices(site_id, next=next_intervals)
         except Exception as e:
             raise Exception(f"Failed to retrieve current prices: {str(e)}")
     
@@ -69,7 +70,7 @@ class AmberClient:
             List of usage intervals
         """
         try:
-            return self.client.get_usage(site_id, start_date=start_date, end_date=end_date)
+            return self.client.get_usage(site_id, start_date=start_date.date(), end_date=end_date.date())
         except Exception as e:
             raise Exception(f"Failed to retrieve usage data: {str(e)}")
     
@@ -86,7 +87,7 @@ class AmberClient:
             List of price intervals
         """
         try:
-            return self.client.get_prices(site_id, start_date=start_date, end_date=end_date)
+            return self.client.get_prices(site_id, start_date=start_date.date(), end_date=end_date.date())
         except Exception as e:
             raise Exception(f"Failed to retrieve price history: {str(e)}")
     
@@ -107,32 +108,13 @@ class AmberClient:
             next_intervals = next_hours * 2
             previous_intervals = previous_hours * 2
             
-            # Use the generic request method to access renewable endpoint
-            path = f"/state/{state}/renewables/current"
-            query_params = {
-                'next': next_intervals,
-                'previous': previous_intervals,
-                'resolution': 30
-            }
-            
-            response = self.client.request(
-                method='GET',
-                path=path,
-                query_params=query_params
+            # Use the new v2.0.12 renewable endpoint
+            return self.client.get_current_renewables(
+                state=state,
+                next=next_intervals,
+                previous=previous_intervals,
+                resolution=30
             )
-            
-            if response.status == 200:
-                # Parse the bytes response as JSON
-                import json
-                if isinstance(response.data, bytes):
-                    data_str = response.data.decode('utf-8')
-                    return json.loads(data_str)
-                elif isinstance(response.data, str):
-                    return json.loads(response.data)
-                else:
-                    return response.data
-            else:
-                raise Exception(f"API returned status {response.status}")
                 
         except Exception as e:
             raise Exception(f"Failed to retrieve renewable data: {str(e)}")
