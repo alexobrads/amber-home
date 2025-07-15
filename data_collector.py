@@ -147,16 +147,14 @@ class DataCollector:
             with self.db_connection.cursor() as cursor:
                 for site in sites:
                     # Handle API changes - network attribute may not exist
-                    network = getattr(site, 'network', None)
-                    logger.info(f"Processing site {site.id} with NMI {site.nmi} and network {network}")
+                    logger.info(f"Processing site {site.id} with NMI {site.nmi}")
                     
                     cursor.execute("""
-                        INSERT INTO sites (id, nmi, network)
+                        INSERT INTO sites (id, nmi)
                         VALUES (%s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
-                            nmi = EXCLUDED.nmi,
-                            network = EXCLUDED.network
-                    """, (site.id, site.nmi, network))
+                            nmi = EXCLUDED.nmi
+                    """, (site.id, site.nmi))
                 
                 self.db_connection.commit()
                 logger.info(f"Collected {len(sites)} sites")

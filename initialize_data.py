@@ -68,15 +68,13 @@ def collect_sites(conn: psycopg2.extensions.connection) -> str:
         
         for site in sites:
             cursor.execute("""
-                INSERT INTO sites (id, nmi, network)
+                INSERT INTO sites (id, nmi)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
-                    nmi = EXCLUDED.nmi,
-                    network = EXCLUDED.network
+                    nmi = EXCLUDED.nmi
             """, (
                 site.id,
-                site.nmi,
-                getattr(site, 'network', None)
+                site.nmi
             ))
     
     site_id = sites[0].id

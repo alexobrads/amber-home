@@ -62,10 +62,10 @@ def show_summary(host: str = "localhost", port: int = 5432, database: str = "amb
     
     # Sites
     print("📍 Sites:")
-    sites = pd.read_sql("SELECT id, nmi, network FROM sites", conn)
+    sites = pd.read_sql("SELECT id, nmi FROM sites", conn)
     if not sites.empty:
         for _, site in sites.iterrows():
-            print(f"  • {site['id']} (NMI: {site['nmi']}, Network: {site['network']})")
+            print(f"  • {site['id']} (NMI: {site['nmi']})")
     else:
         print("  No sites found")
     
