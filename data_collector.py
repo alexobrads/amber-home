@@ -345,15 +345,28 @@ class DataCollector:
         try:
             with self.db_connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT MAX(GREATEST(
-                        COALESCE((SELECT MAX(nem_time) FROM price_data), NULL),
-                        COALESCE((SELECT MAX(nem_time) FROM usage_data), NULL)
-                    )) as latest_date
+                    SELECT 
+                        COALESCE((SELECT MAX(nem_time) FROM price_data), NULL) as latest_price,
+                        COALESCE((SELECT MAX(nem_time) FROM usage_data), NULL) as latest_usage
                 """)
                 result = cursor.fetchone()
-                latest_date = result[0] if result and result[0] else None
+                latest_price = result[0] if result and result[0] else None
+                latest_usage = result[1] if result and result[1] else None
                 
-                # Return the latest timestamp or None
+                logger.debug(f"Latest price data: {latest_price}")
+                logger.debug(f"Latest usage data: {latest_usage}")
+                
+                # Use the earliest of the two to avoid gaps
+                if latest_price and latest_usage:
+                    latest_date = min(latest_price, latest_usage)
+                elif latest_price:
+                    latest_date = latest_price
+                elif latest_usage:
+                    latest_date = latest_usage
+                else:
+                    latest_date = None
+                
+                logger.debug(f"Using latest_date: {latest_date}")
                 return latest_date
                 
         except Exception as e:
@@ -393,8 +406,8 @@ class DataCollector:
         latest_date = self.get_latest_data_date()
         
         if latest_date:
-            # Start from the latest timestamp to ensure no gaps
-            start_date = latest_date - timedelta(hours=1)
+            # Start from the latest timestamp + 1 minute to avoid overlap
+            start_date = latest_date + timedelta(minutes=1)
             logger.info(f"Found existing data, collecting from {start_date}")
         else:
             # No data yet, start from configured start date

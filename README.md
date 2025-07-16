@@ -23,9 +23,9 @@ Amber-Home is a lightweight tool to collect, store, and analyze your Amber Elect
 git clone <repo-url> amber-home
 cd amber-home
 
-# Copy environment file and add your API key
+# Copy environment file and add your API key and start date
 cp .env.example .env
-nano .env  # Add your AMBER_API_KEY
+nano .env  # Add your AMBER_API_KEY and HISTORICAL_START_DATE
 
 # Start DuckDB container
 docker-compose up -d
@@ -37,14 +37,17 @@ uv sync  # or pip install -r requirements.txt
 ### 2. Collect Your Data
 
 ```bash
-# First, collect your sites
-python collect_data.py --type sites
+# The containerized data collector handles all data collection automatically
+# Just start it and it will initialize with your historical data
+docker-compose up -d
 
-# Collect recent price data (last 30 days)
-python collect_data.py --type prices --start 2024-06-01 --end 2024-06-30
+# Monitor the data collection
+docker-compose logs -f data-collector
 
-# Collect recent usage data
-python collect_data.py --type usage --start 2024-06-01 --end 2024-06-30
+# Or use the manual collection scripts if needed:
+# python collect_data.py --type sites
+# python collect_data.py --type prices --start 2024-06-01 --end 2024-06-30
+# python collect_data.py --type usage --start 2024-06-01 --end 2024-06-30
 
 # Check what you've collected
 python query_data.py --summary
