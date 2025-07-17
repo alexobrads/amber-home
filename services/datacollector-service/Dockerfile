@@ -19,5 +19,5 @@ COPY . .
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Run the data collection service using uv
-CMD ["uv", "run", "python", "data_collector.py"]
+# Run the refactored application using uv
+CMD ["uv", "run", "python", "main.py"]

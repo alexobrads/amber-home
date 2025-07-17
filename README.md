@@ -1,216 +1,220 @@
 # Amber-Home 🏠⚡
 
-Simple home energy data collection and analysis for Amber Electric customers.
+Energy data collection and analysis platform for Amber Electric customers.
 
 ## What is Amber-Home?
 
-Amber-Home is a lightweight tool to collect, store, and analyze your Amber Electric energy data. It uses a functional approach with simple Python scripts and DuckDB for fast analytics.
+Amber-Home is a backend platform that automatically collects, stores, and analyzes your Amber Electric energy data using a microservices architecture.
 
-## Features
+## Architecture
 
-- **📊 Data Collection**: Automated collection of prices, usage, and renewable data
-- **🗄️ Local Storage**: DuckDB database for fast analytical queries  
-- **📈 Simple Analysis**: Built-in cost analysis and price trend tools
-- **🐳 Docker Ready**: Containerized DuckDB for easy deployment
-- **📱 Dashboard**: Streamlit dashboard for visual analysis
+### Backend Services
+- **Data Collector Service**: Automated data collection from Amber Electric API
+- **Dashboard Application**: Streamlit web interface for data visualization  
+- **Query Tools**: CLI utilities for data analysis
+
+### Tech Stack
+- Python 3.12 with uv dependency management
+- PostgreSQL database
+- Docker containerization
+- Railway deployment ready
 
 ## Quick Start
 
-### 1. Setup
+### 1. Data Collection Service
 
 ```bash
-# Clone and setup
-git clone <repo-url> amber-home
-cd amber-home
+# Navigate to data collector service
+cd services/datacollector-service
 
-# Copy environment file and add your API key and start date
-cp .env.example .env
-nano .env  # Add your AMBER_API_KEY and HISTORICAL_START_DATE
+# Copy environment template
+cp .env.example .env.local
 
-# Start DuckDB container
+# Configure your settings
+# Add AMBER_API_KEY, DATABASE_URL, HISTORICAL_START_DATE
+
+# Run locally
+uv sync
+uv run python main.py
+
+# Or run with Docker
 docker-compose up -d
-
-# Install Python dependencies
-uv sync  # or pip install -r requirements.txt
 ```
 
-### 2. Collect Your Data
+### 2. Dashboard & Analysis
 
 ```bash
-# The containerized data collector handles all data collection automatically
-# Just start it and it will initialize with your historical data
-docker-compose up -d
-
-# Monitor the data collection
-docker-compose logs -f data-collector
-
-# Or use the manual collection scripts if needed:
-# python collect_data.py --type sites
-# python collect_data.py --type prices --start 2024-06-01 --end 2024-06-30
-# python collect_data.py --type usage --start 2024-06-01 --end 2024-06-30
-
-# Check what you've collected
-python query_data.py --summary
-```
-
-### 3. Analyze Your Data
-
-```bash
-# View cost analysis for last 7 days
-python query_data.py --costs 7
-
-# View price trends for last 14 days  
-python query_data.py --prices 14
-
-# Run custom SQL queries
-python query_data.py --sql "SELECT AVG(per_kwh) FROM price_data WHERE date >= '2024-06-01'"
-```
-
-### 4. Visual Dashboard
-
-```bash
+# From project root
 # Launch Streamlit dashboard
+uv run streamlit run dashboard.py
+
+# Query your data
+python query_data.py --summary
+python query_data.py --costs 7
+python query_data.py --prices 14
+```
+
+## Backend Services
+
+### Data Collector Service
+Located in `services/datacollector-service/`
+
+**Features:**
+- Historical data initialization from configurable start date
+- Continuous 5-minute data collection cycles
+- Separate price and usage data tracking (handles data misalignment)
+- Raw API data storage with no filtering
+- Robust error handling and rate limiting
+- PostgreSQL integration with Railway deployment support
+
+**Configuration:**
+```bash
+AMBER_API_KEY=your_amber_api_key_here
+DATABASE_URL=postgresql://user:pass@host:port/dbname  
+HISTORICAL_START_DATE=2024-01-01
+COLLECTION_INTERVAL_MINUTES=5
+LOG_LEVEL=INFO
+```
+
+### Future Services
+Planned backend services:
+- **API Service**: REST API for frontend applications
+- **Analytics Service**: Data processing and analytics engine
+- **Notification Service**: Alerts and messaging system
+- **Export Service**: Data export and reporting functionality
+
+## Database Schema (PostgreSQL)
+
+### Sites
+- `id`: Site identifier (VARCHAR, PRIMARY KEY)
+- `nmi`: National Metering Identifier (VARCHAR)
+
+### Price Data
+- `site_id`: Reference to site (FOREIGN KEY)
+- `nem_time`: NEM timestamp (TIMESTAMP WITH TIME ZONE)
+- `channel_type`: Energy channel type (VARCHAR)
+- `per_kwh`: Price per kWh in cents (DECIMAL)
+- `spot_per_kwh`: NEM spot price (DECIMAL)
+- `renewables`: Renewable percentage (DECIMAL)
+- Enhanced fields: `start_time`, `end_time`, `duration`, `spike_status`, etc.
+
+### Usage Data
+- `site_id`: Reference to site (FOREIGN KEY)
+- `nem_time`: NEM timestamp (TIMESTAMP WITH TIME ZONE)
+- `channel_id`: Channel identifier (E1, B1, etc.)
+- `channel_type`: Energy channel type (VARCHAR)
+- `kwh`: Energy consumed/generated (DECIMAL)
+- `cost`: Cost in cents (DECIMAL)
+- `quality`: Data quality indicator (VARCHAR)
+- Enhanced fields: `start_time`, `end_time`, `duration`, etc.
+
+## Deployment
+
+### Railway Platform
+Each service can be deployed independently:
+
+```bash
+cd services/datacollector-service
+railway up
+```
+
+Configure environment variables in Railway dashboard:
+- `AMBER_API_KEY`
+- `DATABASE_URL` (auto-configured for Railway Postgres)
+- `HISTORICAL_START_DATE`
+
+### Local Development
+```bash
+# Run data collection service
+cd services/datacollector-service
+uv run python main.py
+
+# Run dashboard (from project root)
 uv run streamlit run dashboard.py
 ```
 
-## Usage Examples
+## Analysis Examples
 
-### Collect Historical Data
-
+### Cost Analysis
 ```bash
-# Collect all data for 2024
-python collect_data.py --type prices --start 2024-01-01 --end 2024-12-31
-python collect_data.py --type usage --start 2024-01-01 --end 2024-12-31
+# View cost breakdown for last 7 days
+python query_data.py --costs 7
 
-# Collect data for specific site
-python collect_data.py --type usage --site YOUR_SITE_ID --start 2024-06-01 --end 2024-06-30
-```
-
-### Analyze Your Energy Patterns
-
-```bash
-# Cost breakdown for last month
-python query_data.py --costs 30
-
-# Price volatility analysis
-python query_data.py --prices 30
-
-# Custom analysis
+# Monthly cost summary
 python query_data.py --sql "
     SELECT 
-        DATE_TRUNC('month', date) as month,
-        SUM(CASE WHEN kwh > 0 THEN kwh ELSE 0 END) as consumption_kwh,
-        SUM(cost_dollars) as total_cost
+        DATE_TRUNC('month', nem_time) as month,
+        SUM(CASE WHEN cost > 0 THEN cost/100 ELSE 0 END) as total_cost
     FROM usage_data 
     GROUP BY month 
-    ORDER BY month
+    ORDER BY month DESC
 "
 ```
 
-### Query Your Data Directly
-
+### Price Analysis
 ```bash
-# Connect to DuckDB directly
-docker-compose exec duckdb python -c "
-import duckdb
-conn = duckdb.connect('/data/amber.duckdb')
-print(conn.execute('SELECT COUNT(*) FROM price_data').fetchone())
+# Price trends for last 14 days
+python query_data.py --prices 14
+
+# Peak vs off-peak pricing
+python query_data.py --sql "
+    SELECT 
+        EXTRACT(hour FROM nem_time) as hour,
+        AVG(per_kwh) as avg_price_cents
+    FROM price_data 
+    GROUP BY hour 
+    ORDER BY hour
 "
-
-# Export data to CSV
-python query_data.py --sql "SELECT * FROM usage_data" > my_usage.csv
 ```
 
-## Database Schema
-
-### Sites
-- `id` - Amber site identifier
-- `nmi` - National Meter Identifier  
-- `network` - Distribution network
-
-### Price Data
-- `site_id` - Site identifier
-- `nem_time` - NEM timestamp
-- `channel_type` - General/ControlledLoad/FeedIn
-- `per_kwh` - Your price (cents/kWh)
-- `spot_per_kwh` - Wholesale price (cents/kWh)
-- `renewables` - Grid renewable percentage
-- `date` - Date for easy querying
-
-### Usage Data  
-- `site_id` - Site identifier
-- `nem_time` - NEM timestamp
-- `channel_id` - Channel identifier (E1, B1, etc.)
-- `kwh` - Energy consumed/generated
-- `cost_dollars` - Cost in dollars (converted from cents)
-- `quality` - Data quality (billable/estimated)
-- `date` - Date for easy querying
-
-## Useful SQL Queries
-
-```sql
--- Daily cost summary
-SELECT 
-    date,
-    SUM(CASE WHEN cost_dollars > 0 THEN cost_dollars ELSE 0 END) as daily_cost,
-    SUM(CASE WHEN cost_dollars < 0 THEN ABS(cost_dollars) ELSE 0 END) as daily_credit
-FROM usage_data 
-GROUP BY date 
-ORDER BY date DESC;
-
--- Peak vs off-peak price analysis
-SELECT 
-    EXTRACT(hour FROM nem_time) as hour,
-    AVG(per_kwh) as avg_price,
-    COUNT(*) as intervals
-FROM price_data 
-GROUP BY hour 
-ORDER BY hour;
-
--- Solar generation vs consumption
-SELECT 
-    date,
-    SUM(CASE WHEN kwh > 0 THEN kwh ELSE 0 END) as consumed,
-    SUM(CASE WHEN kwh < 0 THEN ABS(kwh) ELSE 0 END) as generated
-FROM usage_data 
-WHERE channel_id IN ('E1', 'B1')  -- Adjust for your channels
-GROUP BY date 
-ORDER BY date DESC;
+### Solar Analysis
+```bash
+# Solar generation vs consumption
+python query_data.py --sql "
+    SELECT 
+        DATE(nem_time) as date,
+        SUM(CASE WHEN kwh > 0 THEN kwh ELSE 0 END) as consumed,
+        SUM(CASE WHEN kwh < 0 THEN ABS(kwh) ELSE 0 END) as generated
+    FROM usage_data 
+    WHERE channel_id IN ('E1', 'B1')
+    GROUP BY date 
+    ORDER BY date DESC
+"
 ```
 
-## File Structure
+## Project Structure
 
 ```
 amber-home/
-├── docker-compose.yml      # DuckDB container
-├── collect_data.py        # Data collection script
-├── query_data.py          # Query and analysis tool
-├── dashboard.py           # Streamlit dashboard
-├── amber_client.py        # Amber API client
-├── schema.sql             # Database schema
-├── .env.example           # Environment template
-└── data/                  # Database storage
-    └── amber.duckdb       # Your energy data
+├── services/
+│   └── datacollector-service/     # Data collection microservice
+│       ├── app/                   # Application code
+│       ├── Dockerfile            # Container definition
+│       ├── docker-compose.yml    # Service orchestration
+│       └── README.md             # Service documentation
+├── dashboard.py                  # Streamlit dashboard
+├── query_data.py                # CLI analysis tool
+├── CLAUDE.md                     # Development documentation
+└── README.md                     # This file
 ```
+
+## Contributing
+
+When adding new services:
+1. Create service directory under `services/`
+2. Follow the datacollector-service structure  
+3. Include comprehensive README.md
+4. Add Docker configuration
+5. Update main project documentation
 
 ## Tips
 
-- **Start Small**: Collect a few days of data first to test everything works
-- **Historical Data**: The Amber API limits historical requests to 7-day chunks
-- **Rate Limits**: Be respectful of API limits - the scripts include delays
-- **Backup**: Your `data/amber.duckdb` file contains all your data - back it up!
-- **Analysis**: DuckDB is excellent for time-series analysis - explore the SQL capabilities
-
-## Troubleshooting
-
-**Database not found**: Run `python collect_data.py --type sites` first
-
-**API errors**: Check your `AMBER_API_KEY` in `.env` file
-
-**No data**: Verify your site ID with `python query_data.py --summary`
-
-**Container issues**: `docker-compose down && docker-compose up -d`
+- **Data Collection**: The service handles all data collection automatically
+- **API Limits**: Respects Amber API limits (50 calls per 5 minutes, 7-day max ranges)  
+- **Data Integrity**: Raw API data storage preserves all original information
+- **Monitoring**: Use Docker logs to monitor collection progress
+- **Backup**: PostgreSQL database contains all your valuable energy data
 
 ---
 
-**Amber-Home** gives you complete control over your energy data. Collect it, analyze it, and optimize your energy usage! 🏠⚡📊
+**Amber-Home** gives you complete control over your energy data with a scalable, microservices architecture! 🏠⚡📊
