@@ -105,16 +105,18 @@ class Application:
             raise
     
     def run_update_loop(self) -> None:
-        """Run the main update loop."""
-        logger.info("Starting main update loop...")
+        """Run the main update loop - collect new data every 5 minutes."""
+        logger.info(f"Starting continuous update loop (every {Config.COLLECTION_INTERVAL_MINUTES} minutes)...")
         
         while self.running:
             try:
+                # Update with latest data (no future data will be collected)
+                logger.info("Running scheduled data update...")
                 self.collection_service.update_latest_data()
                 
                 # Wait for configured interval before next update
                 interval_seconds = Config.COLLECTION_INTERVAL_MINUTES * 60
-                logger.info(f"Waiting {Config.COLLECTION_INTERVAL_MINUTES} minutes until next update...")
+                logger.info(f"Next update in {Config.COLLECTION_INTERVAL_MINUTES} minutes...")
                 
                 for _ in range(interval_seconds):
                     if not self.running:
@@ -124,6 +126,7 @@ class Application:
             except Exception as e:
                 logger.error(f"Error during update cycle: {e}")
                 # Wait 1 minute before retrying on error
+                logger.info("Waiting 1 minute before retrying...")
                 time.sleep(60)
     
     def run(self) -> None:
@@ -137,8 +140,8 @@ class Application:
             # Run initial data collection
             self.run_data_collection_cycle()
             
-            # # Start continuous update loop
-            # self.run_update_loop()
+            # Start continuous update loop (5-minute intervals)
+            self.run_update_loop()
             
         except Exception as e:
             logger.error(f"Fatal error in application: {e}")
