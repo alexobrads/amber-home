@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: amber-postgres
+    environment:
+      POSTGRES_DB: amber_home
+      POSTGRES_USER: amber_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-amber_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/datacollector-service/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - amber-network
+    restart: unless-stopped
+
+  # Data Collector Service
+  datacollector:
+    build:
+      context: ./backend/datacollector-service
+      dockerfile: Dockerfile
+    container_name: amber-datacollector-service
+    environment:
+      # Database connection - use local postgres service
+      DATABASE_URL: postgresql://amber_user:${POSTGRES_PASSWORD:-amber_password}@postgres:5432/amber_home
+      
+      # Amber API configuration
+      AMBER_API_KEY: ${AMBER_API_KEY}
+      
+      # Required configuration
+      HISTORICAL_START_DATE: ${HISTORICAL_START_DATE}
+      
+      # Optional configuration (with defaults)
+      COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FORCE_REINIT: ${FORCE_REINIT:-false}
+    depends_on:
+      - postgres
+    networks:
+      - amber-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Frontend Dashboard
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: amber-home-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      # Database connection - use local postgres service
+      DATABASE_URL: postgresql://amber_user:${POSTGRES_PASSWORD:-amber_password}@postgres:5432/amber_home
+      
+      # Application configuration (with defaults)
+      AUTO_REFRESH_SECONDS: ${AUTO_REFRESH_SECONDS:-300}
+    depends_on:
+      - postgres
+      - datacollector
+    networks:
+      - amber-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  postgres_data:
+
+networks:
+  amber-network:
+    driver: bridge

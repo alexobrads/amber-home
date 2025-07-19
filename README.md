@@ -10,12 +10,13 @@ Amber-Home is a backend platform that automatically collects, stores, and analyz
 
 ### Backend Services
 - **Data Collector Service**: Automated data collection from Amber Electric API
-- **Dashboard Application**: Streamlit web interface for data visualization  
+- **Frontend Application**: Modern web interface for energy data visualization
 - **Query Tools**: CLI utilities for data analysis
 
 ### Tech Stack
 - Python 3.12 with uv dependency management
 - PostgreSQL database
+- Streamlit frontend with Plotly charts
 - Docker containerization
 - Railway deployment ready
 
@@ -25,7 +26,7 @@ Amber-Home is a backend platform that automatically collects, stores, and analyz
 
 ```bash
 # Navigate to data collector service
-cd services/datacollector-service
+cd backend/datacollector-service
 
 # Copy environment template
 cp .env.example .env.local
@@ -41,12 +42,32 @@ uv run python main.py
 docker-compose up -d
 ```
 
-### 2. Dashboard & Analysis
+### 2. Frontend Application
+
+```bash
+# Navigate to frontend
+cd frontend
+
+# Copy environment template
+cp .env.example .env
+
+# Configure your database connection
+# Edit .env with your DATABASE_URL
+
+# Run locally
+uv sync
+uv run streamlit run app/main.py
+
+# Or run with Docker
+docker-compose up -d
+```
+
+### 3. CLI Analysis Tools
 
 ```bash
 # From project root
-# Launch Streamlit dashboard
-uv run streamlit run dashboard.py
+# Query and analyze data
+uv run python query_data.py --summary
 
 # Query your data
 python query_data.py --summary
@@ -126,12 +147,31 @@ Configure environment variables in Railway dashboard:
 ### Local Development
 ```bash
 # Run data collection service
-cd services/datacollector-service
+cd backend/datacollector-service
 uv run python main.py
 
-# Run dashboard (from project root)
-uv run streamlit run dashboard.py
+# Run frontend application
+cd frontend
+uv run streamlit run app/main.py
 ```
+
+### Railway Deployment
+
+Deploy both services independently to Railway:
+
+```bash
+# Deploy data collector service
+cd backend/datacollector-service
+railway up
+
+# Deploy frontend application
+cd frontend
+railway up
+```
+
+**Railway Environment Variables:**
+- **Data Collector**: `AMBER_API_KEY`, `HISTORICAL_START_DATE`, `DATABASE_URL` (auto-configured)
+- **Frontend**: `DATABASE_URL` (auto-configured), `AUTO_REFRESH_SECONDS` (optional)
 
 ## Analysis Examples
 
@@ -186,13 +226,20 @@ python query_data.py --sql "
 
 ```
 amber-home/
-├── services/
+├── backend/
 │   └── datacollector-service/     # Data collection microservice
 │       ├── app/                   # Application code
 │       ├── Dockerfile            # Container definition
 │       ├── docker-compose.yml    # Service orchestration
 │       └── README.md             # Service documentation
-├── dashboard.py                  # Streamlit dashboard
+├── frontend/                     # Web frontend application
+│   ├── app/
+│   │   ├── main.py              # Main Streamlit app
+│   │   ├── components/          # UI components
+│   │   └── database.py          # Database service layer
+│   ├── Dockerfile               # Container definition
+│   ├── docker-compose.yml       # Service orchestration
+│   └── README.md                # Frontend documentation
 ├── query_data.py                # CLI analysis tool
 ├── CLAUDE.md                     # Development documentation
 └── README.md                     # This file

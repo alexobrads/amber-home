@@ -63,14 +63,26 @@ class AmberClient:
         
         Args:
             site_id: The site ID to get usage for
-            start_date: Start date for usage data
-            end_date: End date for usage data
+            start_date: Start date for usage data (timezone-aware)
+            end_date: End date for usage data (timezone-aware)
             
         Returns:
-            List of usage intervals
+            List of usage intervals filtered to the exact time range
         """
         try:
-            return self.client.get_usage(site_id, start_date=start_date.date(), end_date=end_date.date())
+            # API works on daily boundaries, so get all data for the date range
+            start_date_api = start_date.date()
+            end_date_api = end_date.date()
+            all_usage = self.client.get_usage(site_id, start_date=start_date_api, end_date=end_date_api)
+            
+            # Filter results to exact datetime range
+            filtered_usage = []
+            for usage in all_usage:
+                # Check if nem_time is within the requested range
+                if start_date <= usage.nem_time <= end_date:
+                    filtered_usage.append(usage)
+            
+            return filtered_usage
         except Exception as e:
             raise Exception(f"Failed to retrieve usage data: {str(e)}")
     
@@ -80,14 +92,28 @@ class AmberClient:
         
         Args:
             site_id: The site ID to get prices for
-            start_date: Start date for price data
-            end_date: End date for price data
+            start_date: Start date for price data (timezone-aware)
+            end_date: End date for price data (timezone-aware)
             
         Returns:
-            List of price intervals
+            List of price intervals filtered to the exact time range
         """
         try:
-            return self.client.get_prices(site_id, start_date=start_date.date(), end_date=end_date.date())
+            # API works on daily boundaries, so get all data for the date range
+            start_date_api = start_date.date()
+            end_date_api = end_date.date()
+            all_prices = self.client.get_prices(site_id, start_date=start_date_api, end_date=end_date_api)
+            
+            # Filter results to exact datetime range
+            filtered_prices = []
+            for price in all_prices:
+                if hasattr(price, 'actual_instance') and price.actual_instance:
+                    actual = price.actual_instance
+                    # Check if nem_time is within the requested range
+                    if start_date <= actual.nem_time <= end_date:
+                        filtered_prices.append(price)
+            
+            return filtered_prices
         except Exception as e:
             raise Exception(f"Failed to retrieve price history: {str(e)}")
     

@@ -65,6 +65,33 @@ class AmberService:
         except Exception as e:
             logger.error(f"Failed to get usage data for site {site_id}: {e}")
             raise
+    
+    def get_current_prices_and_forecasts(self, site_id: str, next_hours: int = 24, previous_hours: int = 2) -> List:
+        """
+        Get current prices and forecasts for a site using the current prices endpoint.
+        
+        Args:
+            site_id: The site ID to get prices for
+            next_hours: Number of hours of forecast data to include
+            previous_hours: Number of hours of recent data to include
+            
+        Returns:
+            List of price intervals (current + forecast)
+        """
+        if not self.client:
+            raise RuntimeError("AmberService not initialized")
+        
+        try:
+            # Calculate number of 30-minute intervals
+            next_intervals = next_hours * 2
+            previous_intervals = previous_hours * 2
+            
+            current_prices = self.client.get_current_prices(site_id, next_hours=next_hours)
+            logger.debug(f"Retrieved {len(current_prices)} current/forecast price records for site {site_id}")
+            return current_prices
+        except Exception as e:
+            logger.error(f"Failed to get current prices for site {site_id}: {e}")
+            raise
 
 
 class CollectionService:
@@ -140,7 +167,10 @@ class CollectionService:
     
     def collect_price_data_from_date(self, start_date: datetime) -> None:
         """Collect price data from a specific date to now."""
-        end_date = datetime.now()
+        from zoneinfo import ZoneInfo
+        # Use NEM time (AEST/AEDT) for data collection
+        aest = ZoneInfo("Australia/Sydney")
+        end_date = datetime.now(aest)
         
         # Ensure both dates are timezone-aware or naive
         if start_date.tzinfo is not None and end_date.tzinfo is None:
@@ -160,7 +190,12 @@ class CollectionService:
     
     def collect_usage_data_from_date(self, start_date: datetime) -> None:
         """Collect usage data from a specific date to now."""
-        end_date = datetime.now()
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+        
+        # Use NEM time (AEST/AEDT) for data collection
+        aest = ZoneInfo("Australia/Sydney")
+        end_date = datetime.now(aest)
         
         # Ensure both dates are timezone-aware or naive
         if start_date.tzinfo is not None and end_date.tzinfo is None:
@@ -189,22 +224,30 @@ class CollectionService:
         logger.info("Historical data collection completed")
     
     def update_latest_data(self) -> None:
-        """Update with latest data since last collection - handle price and usage separately."""
+        """Update with latest data since last collection up to current time."""
         logger.info("Updating latest data...")
         
         # Get the most recent dates for each data type
         latest_price_date = self.db.get_latest_price_date()
         latest_usage_date = self.db.get_latest_usage_date()
         
-        # Update price data
+        # Update price data - collect up to current time only
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+        
+        # Use NEM time (AEST/AEDT)
+        aest = ZoneInfo("Australia/Sydney")
+        now = datetime.now(aest)
+        end_date = now  # Current time only, no future data
+        
         if latest_price_date:
             price_start_date = latest_price_date + timedelta(minutes=1)
-            logger.info(f"Found existing price data, collecting from {price_start_date}")
+            logger.info(f"Found existing price data, collecting from {price_start_date} to {end_date}")
         else:
             price_start_date = Config.get_historical_start_date()
-            logger.info(f"No existing price data found, collecting from configured start date {price_start_date}")
+            logger.info(f"No existing price data found, collecting from configured start date {price_start_date} to {end_date}")
         
-        self.collect_price_data_from_date(price_start_date)
+        self.collect_price_data(price_start_date, end_date)
         
         # Update usage data
         if latest_usage_date:
@@ -217,3 +260,4 @@ class CollectionService:
         self.collect_usage_data_from_date(usage_start_date)
         
         logger.info("Latest data update completed")
+    

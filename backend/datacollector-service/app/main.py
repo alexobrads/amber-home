@@ -137,8 +137,8 @@ class Application:
             # Run initial data collection
             self.run_data_collection_cycle()
             
-            # Start continuous update loop
-            self.run_update_loop()
+            # # Start continuous update loop
+            # self.run_update_loop()
             
         except Exception as e:
             logger.error(f"Fatal error in application: {e}")

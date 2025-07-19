@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS sites (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Price data table matching Amber Electric API schema exactly
 CREATE TABLE IF NOT EXISTS price_data (
     id SERIAL PRIMARY KEY,
     site_id VARCHAR NOT NULL,
@@ -54,10 +55,3 @@ CREATE TABLE IF NOT EXISTS tariff_information (
     demand_window BOOLEAN,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-
-ALTER TABLE price_data ADD CONSTRAINT fk_price_site 
-    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE;
-
-ALTER TABLE usage_data ADD CONSTRAINT fk_usage_site 
-    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE;

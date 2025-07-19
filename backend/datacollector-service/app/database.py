@@ -102,29 +102,53 @@ class DatabaseService:
             return cursor.fetchone()[0]
     
     def get_latest_price_date(self) -> Optional[datetime]:
-        """Get the date of the most recent price data."""
+        """Get the date of the most recent price data in NEM time."""
         if not self.connection:
             raise RuntimeError("Database not connected")
         
         try:
+            from zoneinfo import ZoneInfo
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT MAX(nem_time) FROM price_data")
                 result = cursor.fetchone()
-                return result[0] if result and result[0] else None
+                if result and result[0]:
+                    # Ensure the datetime is timezone-aware in NEM time
+                    dt = result[0]
+                    if dt.tzinfo is None:
+                        # If naive, assume it's already in NEM time
+                        aest = ZoneInfo("Australia/Sydney")
+                        return dt.replace(tzinfo=aest)
+                    else:
+                        # If timezone-aware, convert to NEM time
+                        aest = ZoneInfo("Australia/Sydney")
+                        return dt.astimezone(aest)
+                return None
         except Exception as e:
             logger.error(f"Failed to get latest price date: {e}")
             return None
     
     def get_latest_usage_date(self) -> Optional[datetime]:
-        """Get the date of the most recent usage data."""
+        """Get the date of the most recent usage data in NEM time."""
         if not self.connection:
             raise RuntimeError("Database not connected")
         
         try:
+            from zoneinfo import ZoneInfo
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT MAX(nem_time) FROM usage_data")
                 result = cursor.fetchone()
-                return result[0] if result and result[0] else None
+                if result and result[0]:
+                    # Ensure the datetime is timezone-aware in NEM time
+                    dt = result[0]
+                    if dt.tzinfo is None:
+                        # If naive, assume it's already in NEM time
+                        aest = ZoneInfo("Australia/Sydney")
+                        return dt.replace(tzinfo=aest)
+                    else:
+                        # If timezone-aware, convert to NEM time
+                        aest = ZoneInfo("Australia/Sydney")
+                        return dt.astimezone(aest)
+                return None
         except Exception as e:
             logger.error(f"Failed to get latest usage date: {e}")
             return None
@@ -257,3 +281,4 @@ class DatabaseService:
                 ))
         
         self.connection.commit()
+    
