@@ -25,6 +25,11 @@ class Config:
     COLLECTION_INTERVAL_MINUTES: int = int(os.getenv('COLLECTION_INTERVAL_MINUTES', '5'))
     FORCE_REINIT: bool = os.getenv('FORCE_REINIT', '').lower() == 'true'
     
+    # Forecast collection configuration
+    COLLECT_FORECASTS: bool = os.getenv('COLLECT_FORECASTS', 'true').lower() == 'true'
+    FORECAST_HOURS_AHEAD: int = int(os.getenv('FORECAST_HOURS_AHEAD', '24'))
+    FORECAST_RETENTION_HOURS: int = int(os.getenv('FORECAST_RETENTION_HOURS', '48'))
+    
     @classmethod
     def validate(cls) -> None:
         """Validate required configuration."""

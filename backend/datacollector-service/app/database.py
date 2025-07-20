@@ -282,3 +282,109 @@ class DatabaseService:
         
         self.connection.commit()
     
+    def insert_forecast_data(self, site_id: str, forecast_data: List, forecast_generated_at: datetime) -> None:
+        """Insert forecast price data into database."""
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+        
+        with self.connection.cursor() as cursor:
+            for forecast in forecast_data:
+                # Extract forecast-specific fields
+                forecast_type = getattr(forecast, 'type', 'Unknown')
+                
+                # Extract range data if available
+                range_data = getattr(forecast, 'range', None)
+                range_low = getattr(range_data, 'low', None) if range_data else None
+                range_high = getattr(range_data, 'high', None) if range_data else None
+                
+                # Extract advanced price data if available
+                advanced_price = getattr(forecast, 'advanced_price', None)
+                advanced_low = getattr(advanced_price, 'low', None) if advanced_price else None
+                advanced_predicted = getattr(advanced_price, 'predicted', None) if advanced_price else None
+                advanced_high = getattr(advanced_price, 'high', None) if advanced_price else None
+                
+                cursor.execute("""
+                    INSERT INTO price_forecasts (
+                        site_id, nem_time, start_time, end_time, duration, channel_type, 
+                        per_kwh, spot_per_kwh, renewables, spike_status, descriptor, 
+                        estimate, forecast_type, range_low, range_high, 
+                        advanced_price_low, advanced_price_predicted, advanced_price_high,
+                        forecast_generated_at, var_date
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (site_id, nem_time, channel_type, forecast_generated_at) DO UPDATE SET
+                        per_kwh = EXCLUDED.per_kwh,
+                        spot_per_kwh = EXCLUDED.spot_per_kwh,
+                        renewables = EXCLUDED.renewables,
+                        descriptor = EXCLUDED.descriptor,
+                        range_low = EXCLUDED.range_low,
+                        range_high = EXCLUDED.range_high,
+                        advanced_price_low = EXCLUDED.advanced_price_low,
+                        advanced_price_predicted = EXCLUDED.advanced_price_predicted,
+                        advanced_price_high = EXCLUDED.advanced_price_high
+                """, (
+                    site_id,
+                    forecast.nem_time,
+                    getattr(forecast, 'start_time', None),
+                    getattr(forecast, 'end_time', None),
+                    getattr(forecast, 'duration', None),
+                    str(forecast.channel_type),
+                    forecast.per_kwh,
+                    forecast.spot_per_kwh,
+                    forecast.renewables,
+                    str(getattr(forecast, 'spike_status', None)) if getattr(forecast, 'spike_status', None) else None,
+                    str(getattr(forecast, 'descriptor', None)) if getattr(forecast, 'descriptor', None) else None,
+                    getattr(forecast, 'estimate', False),
+                    forecast_type,
+                    range_low,
+                    range_high,
+                    advanced_low,
+                    advanced_predicted,
+                    advanced_high,
+                    forecast_generated_at,
+                    getattr(forecast, 'var_date', None)
+                ))
+        
+        self.connection.commit()
+    
+    def cleanup_old_forecasts(self, older_than_hours: int = 48) -> int:
+        """Remove forecast data older than specified hours."""
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+        
+        with self.connection.cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM price_forecasts 
+                WHERE forecast_generated_at < NOW() - INTERVAL '%s hours'
+            """, (older_than_hours,))
+            
+            deleted_count = cursor.rowcount
+            self.connection.commit()
+            
+            logger.info(f"Cleaned up {deleted_count} old forecast records")
+            return deleted_count
+    
+    def get_latest_forecast_timestamp(self) -> Optional[datetime]:
+        """Get the timestamp of the most recent forecast generation."""
+        if not self.connection:
+            return None
+        
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT MAX(forecast_generated_at) FROM price_forecasts")
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                dt = result[0]
+                if dt.tzinfo is None:
+                    # If naive, assume it's already in NEM time
+                    from zoneinfo import ZoneInfo
+                    aest = ZoneInfo("Australia/Sydney")
+                    return dt.replace(tzinfo=aest)
+                else:
+                    # If timezone-aware, convert to NEM time
+                    from zoneinfo import ZoneInfo
+                    aest = ZoneInfo("Australia/Sydney")
+                    return dt.astimezone(aest)
+            
+            return None
+    

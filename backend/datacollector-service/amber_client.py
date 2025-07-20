@@ -117,6 +117,43 @@ class AmberClient:
         except Exception as e:
             raise Exception(f"Failed to retrieve price history: {str(e)}")
     
+    def get_forecast_data(self, site_id: str, hours_ahead: int = 24):
+        """
+        Get forecast price data for a site.
+        
+        Args:
+            site_id: The site ID to get forecasts for
+            hours_ahead: Number of hours of forecast data to retrieve
+            
+        Returns:
+            List of forecast intervals (ForecastInterval and CurrentInterval only)
+        """
+        try:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            
+            # Get current prices and forecasts using existing method
+            all_intervals = self.client.get_current_prices(site_id, next=hours_ahead*12)  # 5-minute intervals
+            
+            # Filter for forecast data only (future intervals)
+            aest = ZoneInfo("Australia/Sydney")
+            current_time = datetime.now(aest)
+            
+            forecast_intervals = []
+            for interval in all_intervals:
+                if hasattr(interval, 'actual_instance') and interval.actual_instance:
+                    actual = interval.actual_instance
+                    
+                    # Only include forecast and current intervals that are in the future
+                    if (actual.nem_time > current_time and 
+                        hasattr(actual, 'type') and 
+                        actual.type in ['ForecastInterval', 'CurrentInterval']):
+                        forecast_intervals.append(actual)
+            
+            return forecast_intervals
+        except Exception as e:
+            raise Exception(f"Failed to retrieve forecast data: {str(e)}")
+    
     def get_renewable_data(self, state: str = 'vic', next_hours: int = 24, previous_hours: int = 24):
         """
         Get renewable energy data for a state.

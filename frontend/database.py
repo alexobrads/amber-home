@@ -147,3 +147,44 @@ class DatabaseService:
         if df.empty or df['latest_time'].iloc[0] is None:
             return None
         return df['latest_time'].iloc[0]
+    
+    def get_forecast_data_10h(self) -> pd.DataFrame:
+        """Get forecast price data for the next 10 hours in AEST timezone."""
+        query = """
+        SELECT 
+            nem_time AT TIME ZONE 'Australia/Sydney' as aest_time,
+            channel_type,
+            per_kwh,
+            spot_per_kwh,
+            renewables,
+            descriptor,
+            spike_status,
+            forecast_type,
+            advanced_price_low,
+            advanced_price_predicted,
+            advanced_price_high,
+            range_low,
+            range_high
+        FROM price_forecasts 
+        WHERE nem_time AT TIME ZONE 'Australia/Sydney' >= 
+              NOW() AT TIME ZONE 'Australia/Sydney'
+          AND nem_time AT TIME ZONE 'Australia/Sydney' < 
+              NOW() AT TIME ZONE 'Australia/Sydney' + INTERVAL '10 hours'
+          AND forecast_generated_at = (
+              SELECT MAX(forecast_generated_at) 
+              FROM price_forecasts 
+              WHERE forecast_generated_at >= NOW() - INTERVAL '2 hours'
+          )
+        ORDER BY nem_time ASC
+        """
+        return self.execute_query(query)
+    
+    def get_combined_historical_and_forecast_data(self) -> Dict[str, pd.DataFrame]:
+        """Get both historical (today) and forecast (next 10h) price data."""
+        historical_df = self.get_price_data_today()
+        forecast_df = self.get_forecast_data_10h()
+        
+        return {
+            'historical': historical_df,
+            'forecast': forecast_df
+        }

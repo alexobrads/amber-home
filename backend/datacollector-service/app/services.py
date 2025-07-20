@@ -92,6 +92,19 @@ class AmberService:
         except Exception as e:
             logger.error(f"Failed to get current prices for site {site_id}: {e}")
             raise
+    
+    def get_forecast_data(self, site_id: str, hours_ahead: int = 24) -> List:
+        """Get forecast price data for a site."""
+        if not self.client:
+            raise RuntimeError("AmberService not initialized")
+        
+        try:
+            forecasts = self.client.get_forecast_data(site_id, hours_ahead)
+            logger.debug(f"Retrieved {len(forecasts)} forecast price records for site {site_id}")
+            return forecasts
+        except Exception as e:
+            logger.error(f"Failed to get forecast data for site {site_id}: {e}")
+            raise
 
 
 class CollectionService:
@@ -259,5 +272,60 @@ class CollectionService:
         
         self.collect_usage_data_from_date(usage_start_date)
         
+        # Collect forecast data if enabled
+        from .config import Config
+        if Config.COLLECT_FORECASTS:
+            try:
+                self.collect_forecast_data()
+            except Exception as e:
+                logger.error(f"Failed to collect forecast data: {e}")
+                # Don't fail the entire update if forecast collection fails
+        
         logger.info("Latest data update completed")
+    
+    def collect_forecast_data(self) -> None:
+        """Collect forecast price data for all sites."""
+        if not self.sites:
+            raise RuntimeError("Sites not collected yet")
+        
+        from .config import Config
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        
+        # Get current time for forecast generation timestamp
+        aest = ZoneInfo("Australia/Sydney")
+        forecast_generated_at = datetime.now(aest)
+        
+        # Get forecast hours configuration
+        hours_ahead = Config.FORECAST_HOURS_AHEAD
+        
+        logger.info(f"Collecting forecast data ({hours_ahead} hours ahead) for {len(self.sites)} sites...")
+        
+        for site in self.sites:
+            try:
+                # Get forecast data for this site
+                forecasts = self.amber.get_forecast_data(site.id, hours_ahead)
+                
+                if forecasts:
+                    # Store forecast data with generation timestamp
+                    self.db.insert_forecast_data(site.id, forecasts, forecast_generated_at)
+                    logger.info(f"Collected {len(forecasts)} forecast records for site {site.id}")
+                else:
+                    logger.warning(f"No forecast data available for site {site.id}")
+                
+                # Rate limiting
+                time.sleep(2)
+                
+            except Exception as e:
+                logger.error(f"Failed to collect forecast data for site {site.id}: {e}")
+                continue
+        
+        # Cleanup old forecasts
+        retention_hours = Config.FORECAST_RETENTION_HOURS
+        try:
+            self.db.cleanup_old_forecasts(retention_hours)
+        except Exception as e:
+            logger.error(f"Failed to cleanup old forecasts: {e}")
+        
+        logger.info("Forecast data collection completed")
     

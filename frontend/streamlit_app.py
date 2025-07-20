@@ -10,7 +10,7 @@ import pytz
 import logging
 from config import Config
 from database import DatabaseService
-from components.price_charts import create_price_chart, display_price_summary
+from components.price_charts import create_price_chart, display_price_summary, create_price_chart_with_forecasts
 from components.usage_charts import create_usage_chart, display_usage_summary
 from components.cost_stats import display_cost_stats, create_daily_cost_chart, create_usage_breakdown_chart
 
@@ -90,6 +90,16 @@ def load_cost_stats():
         return {}
 
 @st.cache_data(ttl=Config.AUTO_REFRESH_SECONDS)
+def load_combined_price_data():
+    """Load combined historical and forecast price data with caching."""
+    db = init_database()
+    try:
+        return db.get_combined_historical_and_forecast_data()
+    except Exception as e:
+        logger.error(f"Error loading combined price data: {e}")
+        return {'historical': pd.DataFrame(), 'forecast': pd.DataFrame()}
+
+@st.cache_data(ttl=Config.AUTO_REFRESH_SECONDS)
 def get_last_updated():
     """Get last updated timestamp."""
     db = init_database()
@@ -126,11 +136,13 @@ def main():
     # Load data
     try:
         price_data = load_price_data()
+        combined_price_data = load_combined_price_data()
         usage_data = load_usage_data()
         cost_stats = load_cost_stats()
         
         # Check for data availability
-        if price_data.empty and usage_data.empty:
+        historical_df = combined_price_data.get('historical', pd.DataFrame())
+        if historical_df.empty and usage_data.empty:
             st.error("❌ No data available. Please check that the data collector service is running and has collected data.")
             st.info("💡 Run the data collector service: `cd backend/datacollector-service && python main.py`")
             return
@@ -138,11 +150,31 @@ def main():
         # Price Section
         st.markdown("## 💰 Electricity Prices")
         
-        if not price_data.empty:
+        # Show forecast toggle
+        show_forecasts = st.checkbox("Show 10-hour forecasts", value=True, help="Display price forecasts with uncertainty bands")
+        
+        if show_forecasts and not combined_price_data['historical'].empty:
+            # Combined historical + forecast chart
+            if not combined_price_data['forecast'].empty:
+                st.info("📈 Showing historical prices + 10-hour forecasts with uncertainty bands")
+            else:
+                st.warning("⚠️ No forecast data available - showing historical data only")
+            
+            # Price summary metrics (using historical data)
+            display_price_summary(combined_price_data['historical'])
+            
+            # Combined price chart with forecasts
+            combined_chart = create_price_chart_with_forecasts(combined_price_data)
+            st.plotly_chart(combined_chart, use_container_width=True)
+            
+        elif not price_data.empty:
+            # Historical only chart
+            st.info("📊 Showing historical prices only")
+            
             # Price summary metrics
             display_price_summary(price_data)
             
-            # Price chart
+            # Historical price chart
             price_chart = create_price_chart(price_data)
             st.plotly_chart(price_chart, use_container_width=True)
         else:
