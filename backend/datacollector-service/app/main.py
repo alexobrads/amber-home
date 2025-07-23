@@ -105,13 +105,13 @@ class Application:
             raise
     
     def run_update_loop(self) -> None:
-        """Run the main update loop - collect new data every 5 minutes."""
+        """Run the main update loop - collect new data and forecasts every 5 minutes."""
         logger.info(f"Starting continuous update loop (every {Config.COLLECTION_INTERVAL_MINUTES} minutes)...")
         
         while self.running:
             try:
-                # Update with latest data (no future data will be collected)
-                logger.info("Running scheduled data update...")
+                # Update with latest historical data and collect fresh forecasts
+                logger.info("Running scheduled data update (historical + forecasts)...")
                 self.collection_service.update_latest_data()
                 
                 # Wait for configured interval before next update

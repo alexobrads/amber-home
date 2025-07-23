@@ -227,14 +227,25 @@ class CollectionService:
         logger.info("Usage data collection completed")
     
     def collect_historical_data(self) -> None:
-        """Collect all historical data from configured start date."""
+        """Collect all historical data from configured start date plus initial forecasts."""
         start_date = Config.get_historical_start_date()
         logger.info(f"Collecting all historical data from {start_date}")
         
         self.collect_price_data_from_date(start_date)
         self.collect_usage_data_from_date(start_date)
         
-        logger.info("Historical data collection completed")
+        # Collect initial forecast data
+        if Config.COLLECT_FORECASTS:
+            try:
+                logger.info("Collecting initial forecast data...")
+                self.collect_forecast_data()
+            except Exception as e:
+                logger.error(f"Failed to collect initial forecast data: {e}")
+                # Don't fail historical collection if forecasts fail
+        else:
+            logger.info("Forecast collection disabled in configuration")
+        
+        logger.info("Historical data collection completed (with initial forecasts)")
     
     def update_latest_data(self) -> None:
         """Update with latest data since last collection up to current time."""
@@ -272,23 +283,24 @@ class CollectionService:
         
         self.collect_usage_data_from_date(usage_start_date)
         
-        # Collect forecast data if enabled
-        from .config import Config
+        # Always collect fresh forecast data (default enabled)
         if Config.COLLECT_FORECASTS:
             try:
+                logger.info("Collecting fresh forecast data...")
                 self.collect_forecast_data()
             except Exception as e:
                 logger.error(f"Failed to collect forecast data: {e}")
                 # Don't fail the entire update if forecast collection fails
+        else:
+            logger.info("Forecast collection disabled in configuration")
         
-        logger.info("Latest data update completed")
+        logger.info("Latest data update completed (historical + forecasts)")
     
     def collect_forecast_data(self) -> None:
         """Collect forecast price data for all sites."""
         if not self.sites:
             raise RuntimeError("Sites not collected yet")
         
-        from .config import Config
         from datetime import datetime
         from zoneinfo import ZoneInfo
         
